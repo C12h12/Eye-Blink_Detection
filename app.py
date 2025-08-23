@@ -10,16 +10,15 @@ st.title("👁️ Drowsiness Detection App (WebRTC)")
 
 # Detector
 detector = FaceMeshDetector(maxFaces=1)
-plotY = LivePlot(640, 360, [20, 50], invert=True)
 
-# Free STUN + TURN config (public servers)
+# STUN + Twilio TURN
 RTC_CONFIGURATION = RTCConfiguration({
     "iceServers": [
         {"urls": "stun:stun.l.google.com:19302"},
         {
-            "urls": "turn:numb.viagenie.ca",
-            "username": "webrtc@live.com",
-            "credential": "muazkh"
+            "urls": "turn:global.turn.twilio.com:3478?transport=udp",
+            "username": "guest",
+            "credential": "somepassword"
         }
     ]
 })
@@ -73,7 +72,7 @@ class DrowsinessProcessor(VideoProcessorBase):
                 self.drowsy_counter = 0
                 self.alert_on = False
 
-            if self.drowsy_counter > 40:  # threshold
+            if self.drowsy_counter > 40:
                 self.alert_on = True
 
             # Info display
