@@ -3,24 +3,16 @@ import cv2
 import numpy as np
 from cvzone.FaceMeshModule import FaceMeshDetector
 from cvzone.PlotModule import LivePlot
-from streamlit_webrtc import webrtc_streamer, VideoTransformerBase, WebRtcMode
+from streamlit_webrtc import webrtc_streamer, VideoTransformerBase, WebRtcMode, RTCConfiguration
 
 st.set_page_config(page_title="Drowsiness Detection", layout="wide")
 st.title("👁️ Drowsiness Detection App (WebRTC)")
 
 # Detector
 detector = FaceMeshDetector(maxFaces=1)
-plotY = LivePlot(640, 360, [20, 50], invert=True)
 
 # Drowsiness variables
-ratioList = []
-blinkCounter = 0
-counter = 0
-color = (255, 0, 255)
-drowsy_counter = 0
 DROWSY_THRESH = 40
-alert_on = False
-
 
 class DrowsinessTransformer(VideoTransformerBase):
     def __init__(self):
@@ -90,10 +82,16 @@ class DrowsinessTransformer(VideoTransformerBase):
         return imgStack
 
 
+# --- WebRTC configuration (important for Streamlit Cloud) ---
+RTC_CONFIGURATION = RTCConfiguration(
+    {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
+)
+
 # Streamlit WebRTC
 webrtc_streamer(
     key="drowsiness-detection",
     mode=WebRtcMode.SENDRECV,
+    rtc_configuration=RTC_CONFIGURATION,  # ✅ Added for Streamlit Cloud
     video_transformer_factory=DrowsinessTransformer,
     media_stream_constraints={"video": True, "audio": False},
     async_transform=True
