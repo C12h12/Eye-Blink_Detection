@@ -3,18 +3,29 @@ import cv2
 import numpy as np
 from cvzone.FaceMeshModule import FaceMeshDetector
 from cvzone.PlotModule import LivePlot
-from streamlit_webrtc import webrtc_streamer, VideoTransformerBase, WebRtcMode, RTCConfiguration
+from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, WebRtcMode, RTCConfiguration
 
 st.set_page_config(page_title="Drowsiness Detection", layout="wide")
 st.title("👁️ Drowsiness Detection App (WebRTC)")
 
 # Detector
 detector = FaceMeshDetector(maxFaces=1)
+plotY = LivePlot(640, 360, [20, 50], invert=True)
 
-# Drowsiness variables
-DROWSY_THRESH = 40
+# Free STUN + TURN config (public servers)
+RTC_CONFIGURATION = RTCConfiguration({
+    "iceServers": [
+        {"urls": "stun:stun.l.google.com:19302"},
+        {
+            "urls": "turn:numb.viagenie.ca",
+            "username": "webrtc@live.com",
+            "credential": "muazkh"
+        }
+    ]
+})
 
-class DrowsinessTransformer(VideoTransformerBase):
+
+class DrowsinessProcessor(VideoProcessorBase):
     def __init__(self):
         self.ratioList = []
         self.blinkCounter = 0
@@ -24,7 +35,7 @@ class DrowsinessTransformer(VideoTransformerBase):
         self.alert_on = False
         self.plotY = LivePlot(640, 360, [20, 50], invert=True)
 
-    def transform(self, frame):
+    def recv(self, frame):
         img = frame.to_ndarray(format="bgr")
         img, faces = detector.findFaceMesh(img, draw=False)
 
@@ -62,7 +73,7 @@ class DrowsinessTransformer(VideoTransformerBase):
                 self.drowsy_counter = 0
                 self.alert_on = False
 
-            if self.drowsy_counter > DROWSY_THRESH:
+            if self.drowsy_counter > 40:  # threshold
                 self.alert_on = True
 
             # Info display
@@ -82,17 +93,12 @@ class DrowsinessTransformer(VideoTransformerBase):
         return imgStack
 
 
-# --- WebRTC configuration (important for Streamlit Cloud) ---
-RTC_CONFIGURATION = RTCConfiguration(
-    {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
-)
-
-# Streamlit WebRTC
+# WebRTC streamer
 webrtc_streamer(
     key="drowsiness-detection",
     mode=WebRtcMode.SENDRECV,
-    rtc_configuration=RTC_CONFIGURATION,  # ✅ Added for Streamlit Cloud
-    video_transformer_factory=DrowsinessTransformer,
+    rtc_configuration=RTC_CONFIGURATION,
+    video_processor_factory=DrowsinessProcessor,
     media_stream_constraints={"video": True, "audio": False},
-    async_transform=True
+    async_processing=True
 )
