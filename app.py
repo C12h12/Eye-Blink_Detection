@@ -6,12 +6,12 @@ from cvzone.PlotModule import LivePlot
 from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, WebRtcMode, RTCConfiguration
 
 st.set_page_config(page_title="Drowsiness Detection", layout="wide")
-st.title("👁️ Drowsiness Detection App (WebRTC)")
+st.title("👁️ Drowsiness Detection App (Optimized)")
 
 # Detector
 detector = FaceMeshDetector(maxFaces=1)
 
-# STUN + Twilio TURN
+# STUN + TURN
 RTC_CONFIGURATION = RTCConfiguration({
     "iceServers": [
         {"urls": "stun:stun.l.google.com:19302"},
@@ -32,10 +32,20 @@ class DrowsinessProcessor(VideoProcessorBase):
         self.color = (255, 0, 255)
         self.drowsy_counter = 0
         self.alert_on = False
-        self.plotY = LivePlot(640, 360, [20, 50], invert=True)
+        self.plotY = LivePlot(320, 240, [20, 50], invert=True)
+        self.frame_count = 0  # for skipping frames
 
     def recv(self, frame):
+        self.frame_count += 1
         img = frame.to_ndarray(format="bgr")
+
+        # Resize first to reduce processing
+        img = cv2.resize(img, (640, 480))
+
+        # Process only 1 out of 5 frames
+        if self.frame_count % 5 != 0:
+            return img
+
         img, faces = detector.findFaceMesh(img, draw=False)
 
         if faces:
@@ -50,7 +60,7 @@ class DrowsinessProcessor(VideoProcessorBase):
 
             ratio = int((lengthVer / lengthHor) * 100)
             self.ratioList.append(ratio)
-            if len(self.ratioList) > 3:
+            if len(self.ratioList) > 5:
                 self.ratioList.pop(0)
             ratioAvg = sum(self.ratioList) / len(self.ratioList)
 
@@ -75,21 +85,14 @@ class DrowsinessProcessor(VideoProcessorBase):
             if self.drowsy_counter > 40:
                 self.alert_on = True
 
-            # Info display
-            cv2.putText(img, f'Blink Count: {self.blinkCounter}', (50, 100),
+            cv2.putText(img, f'Blink Count: {self.blinkCounter}', (30, 50),
                         cv2.FONT_HERSHEY_SIMPLEX, 1, self.color, 2)
+
             if self.alert_on:
-                cv2.putText(img, "⚠️ DROWSINESS ALERT ⚠️", (180, 200),
-                            cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 3)
+                cv2.putText(img, "⚠️ DROWSINESS ALERT ⚠️", (120, 120),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 255), 3)
 
-            imgPlot = self.plotY.update(ratioAvg, self.color)
-            img = cv2.resize(img, (640, 360))
-            imgStack = np.hstack([img, imgPlot])
-        else:
-            img = cv2.resize(img, (640, 360))
-            imgStack = np.hstack([img, img])
-
-        return imgStack
+        return img
 
 
 # WebRTC streamer
@@ -98,6 +101,9 @@ webrtc_streamer(
     mode=WebRtcMode.SENDRECV,
     rtc_configuration=RTC_CONFIGURATION,
     video_processor_factory=DrowsinessProcessor,
-    media_stream_constraints={"video": True, "audio": False},
+    media_stream_constraints={
+        "video": {"width": 640, "height": 480},  # reduce resolution
+        "audio": False
+    },
     async_processing=True
 )
